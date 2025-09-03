@@ -1,49 +1,85 @@
 package supervisor
 
 import (
+	"errors"
 	"sync"
 
-	"golang.org/x/sync/errgroup"
+	"mp/internal/pkg/panicerr"
 )
 
 type Supervisor struct {
-	mutex     sync.Mutex
-	stop      []chan<- StopToken
-	processes errgroup.Group
+	group   sync.WaitGroup
+	mutex   sync.Mutex
+	stopped bool
+	stops   []chan<- StopToken
+	err     error
 }
 
 func New() *Supervisor {
 	return &Supervisor{
-		mutex:     sync.Mutex{},
-		stop:      nil,
-		processes: errgroup.Group{},
+		group:   sync.WaitGroup{},
+		mutex:   sync.Mutex{},
+		stopped: false,
+		stops:   nil,
+		err:     nil,
 	}
 }
 
 func (s *Supervisor) Run(p Process) {
-	stop := s.addStop()
-	s.processes.Go(func() error {
+	w := func(stop <-chan StopToken) (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				pe := panicerr.New(r)
+				if err == nil {
+					err = pe
+				} else {
+					err = errors.Join(err, pe)
+				}
+			}
+		}()
 		return p(stop)
-	})
+	}
+	stop := s.addStop()
+	s.group.Add(1)
+	go func() {
+		defer s.group.Done()
+		s.setError(w(stop))
+	}()
 }
 
 func (s *Supervisor) Wait() error {
-	return s.processes.Wait()
+	s.group.Wait()
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	return s.err
 }
 
 func (s *Supervisor) Stop() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	for _, s := range s.stop {
+	for _, s := range s.stops {
 		close(s)
 	}
-	s.stop = nil
+	s.stops = nil
+	s.stopped = true
 }
 
 func (s *Supervisor) addStop() <-chan StopToken {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	stop := make(chan StopToken)
-	s.stop = append(s.stop, stop)
+	if s.stopped {
+		close(stop)
+	} else {
+		s.stops = append(s.stops, stop)
+	}
 	return stop
+}
+
+func (s *Supervisor) setError(err error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	if s.err == nil {
+		s.err = err
+	}
 }
