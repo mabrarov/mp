@@ -4,7 +4,7 @@ import (
 	"errors"
 	"sync"
 
-	"mp/internal/pkg/panicerr"
+	"mp/pkg/panicerr"
 )
 
 type Supervisor struct {
@@ -26,24 +26,11 @@ func New() *Supervisor {
 }
 
 func (s *Supervisor) Run(p Process) {
-	w := func(stop <-chan StopToken) (err error) {
-		defer func() {
-			if r := recover(); r != nil {
-				pe := panicerr.New(r)
-				if err == nil {
-					err = pe
-				} else {
-					err = errors.Join(err, pe)
-				}
-			}
-		}()
-		return p(stop)
-	}
 	stop := s.addStop()
 	s.group.Add(1)
 	go func() {
 		defer s.group.Done()
-		s.setError(w(stop))
+		s.setError(runWithoutPanic(p, stop))
 	}()
 }
 
@@ -62,6 +49,20 @@ func (s *Supervisor) Stop() {
 	}
 	s.stops = nil
 	s.stopped = true
+}
+
+func runWithoutPanic(p Process, stop <-chan StopToken) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			pe := panicerr.New(r)
+			if err == nil {
+				err = pe
+			} else {
+				err = errors.Join(err, pe)
+			}
+		}
+	}()
+	return p(stop)
 }
 
 func (s *Supervisor) addStop() <-chan StopToken {
