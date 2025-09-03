@@ -13,12 +13,16 @@ import (
 
 func main() {
 	s := supervisor.New()
-	defer s.Stop()
+	defer func() {
+		s.Stop()
+		_ = s.Wait()
+	}()
 
 	userStop := make(chan os.Signal, 1)
 	signal.Notify(userStop, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
-		<-userStop
+		sg := <-userStop
+		fmt.Printf("Got signal %v, exiting...\n", sg)
 		s.Stop()
 	}()
 
@@ -37,7 +41,7 @@ func main() {
 					break eventLoop
 				case <-mid:
 					if rand.IntN(100) == 0 {
-						err = fmt.Errorf("%d", num)
+						err = fmt.Errorf("failed %d", num)
 						fmt.Printf("Error %d\n", num)
 						s.Stop()
 						break eventLoop
