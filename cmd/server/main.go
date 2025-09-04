@@ -24,15 +24,7 @@ func main() {
 	for i := range 10 {
 		num := i
 		s.Go(func(ctx context.Context) error {
-			completed := false
-			defer func() {
-				if !completed {
-					s.Stop()
-				}
-			}()
-			err := run(ctx, s.Stop, num)
-			completed = true
-			return err
+			return run(ctx, s.Stop, num)
 		})
 	}
 

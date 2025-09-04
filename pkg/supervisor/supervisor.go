@@ -2,7 +2,6 @@ package supervisor
 
 import (
 	"context"
-	"errors"
 	"sync"
 
 	"github.com/mabrarov/mp/pkg/panicerr"
@@ -31,7 +30,13 @@ func (s *Supervisor) Go(p Process) {
 	s.group.Add(1)
 	go func() {
 		defer s.group.Done()
-		s.setError(runWithoutPanic(p, s.ctx))
+		defer func() {
+			if r := recover(); r != nil {
+				s.setError(panicerr.New(r))
+				s.Stop()
+			}
+		}()
+		s.setError(p(s.ctx))
 	}()
 }
 
@@ -44,20 +49,6 @@ func (s *Supervisor) Wait() error {
 
 func (s *Supervisor) Stop() {
 	s.cancel()
-}
-
-func runWithoutPanic(p Process, ctx context.Context) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			pe := panicerr.New(r)
-			if err == nil {
-				err = pe
-			} else {
-				err = errors.Join(err, pe)
-			}
-		}
-	}()
-	return p(ctx)
 }
 
 func (s *Supervisor) setError(err error) {
