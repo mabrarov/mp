@@ -13,18 +13,12 @@ import (
 )
 
 func main() {
-	s := supervisor.New(context.Background())
+	ctx, _ := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+
+	s := supervisor.New(ctx)
 	defer func() {
 		s.Stop()
 		_ = s.Wait()
-	}()
-
-	userStop := make(chan os.Signal, 1)
-	signal.Notify(userStop, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		sg := <-userStop
-		fmt.Printf("Got signal %v, exiting...\n", sg)
-		s.Stop()
 	}()
 
 	for i := range 10 {
