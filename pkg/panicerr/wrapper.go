@@ -3,19 +3,19 @@ package panicerr
 import "fmt"
 
 type Wrapper struct {
-	value any
+	Value any
 }
 
 func New(value any) *Wrapper {
-	return &Wrapper{value: value}
+	return &Wrapper{Value: value}
 }
 
 func (e *Wrapper) Error() string {
-	if err, ok := e.value.(error); ok {
+	if err, ok := e.Value.(error); ok {
 		return err.Error()
 	}
-	if s, ok := e.value.(fmt.Stringer); ok {
+	if s, ok := e.Value.(fmt.Stringer); ok {
 		return s.String()
 	}
-	return fmt.Sprintf("%v", e.value)
+	return fmt.Sprintf("%v", e.Value)
 }
