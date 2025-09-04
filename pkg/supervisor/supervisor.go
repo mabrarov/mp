@@ -4,7 +4,7 @@ import (
 	"errors"
 	"sync"
 
-	"mp/pkg/panicerr"
+	"github.com/mabrarov/mp/pkg/panicerr"
 )
 
 type Supervisor struct {

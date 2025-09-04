@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"mp/pkg/supervisor"
+	"github.com/mabrarov/mp/pkg/supervisor"
 )
 
 func main() {
