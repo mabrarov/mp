@@ -66,9 +66,9 @@ func runWithoutPanic(p Process, stop <-chan StopToken) (err error) {
 }
 
 func (s *Supervisor) addStop() <-chan StopToken {
+	stop := make(chan StopToken)
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	stop := make(chan StopToken)
 	if s.stopped {
 		close(stop)
 	} else {
