@@ -62,6 +62,9 @@ func (s *Supervisor) run(p Process) (err error) {
 }
 
 func (s *Supervisor) setError(err error) {
+	if err == nil {
+		return
+	}
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	if s.err == nil {
