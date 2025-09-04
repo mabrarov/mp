@@ -29,7 +29,15 @@ func main() {
 	for i := range 10 {
 		num := i
 		s.Run(func(stop <-chan supervisor.StopToken) error {
-			return run(stop, s.Stop, num)
+			completed := false
+			defer func() {
+				if !completed {
+					s.Stop()
+				}
+			}()
+			err := run(stop, s.Stop, num)
+			completed = true
+			return err
 		})
 	}
 
@@ -53,11 +61,15 @@ eventLoop:
 			fmt.Printf("Stopped %d\n", num)
 			break eventLoop
 		case <-mid:
-			if rand.IntN(100) == 0 {
+			n := rand.IntN(100)
+			if n == 0 {
 				err = fmt.Errorf("failed %d", num)
 				fmt.Printf("Error %d\n", num)
 				shutdown()
 				break eventLoop
+			}
+			if n == 1 {
+				panic(fmt.Sprintf("panic %d", num))
 			}
 		case <-done:
 			fmt.Printf("Done %d\n", num)
