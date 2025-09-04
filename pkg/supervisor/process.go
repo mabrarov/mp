@@ -1,5 +1,7 @@
 package supervisor
 
+import "context"
+
 type StopToken struct{}
 
-type Process func(stop <-chan StopToken) error
+type Process func(ctx context.Context) error

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -12,7 +13,7 @@ import (
 )
 
 func main() {
-	s := supervisor.New()
+	s := supervisor.New(context.Background())
 	defer func() {
 		s.Stop()
 		_ = s.Wait()
@@ -28,14 +29,14 @@ func main() {
 
 	for i := range 10 {
 		num := i
-		s.Run(func(stop <-chan supervisor.StopToken) error {
+		s.Go(func(ctx context.Context) error {
 			completed := false
 			defer func() {
 				if !completed {
 					s.Stop()
 				}
 			}()
-			err := run(stop, s.Stop, num)
+			err := run(ctx, s.Stop, num)
 			completed = true
 			return err
 		})
@@ -49,7 +50,7 @@ func main() {
 	fmt.Println("Completed without error")
 }
 
-func run(stop <-chan supervisor.StopToken, shutdown func(), num int) error {
+func run(ctx context.Context, shutdown func(), num int) error {
 	fmt.Printf("Started %d\n", num)
 	mid := time.Tick(1 * time.Second)
 	done := time.Tick(10 * time.Second)
@@ -57,7 +58,7 @@ func run(stop <-chan supervisor.StopToken, shutdown func(), num int) error {
 eventLoop:
 	for {
 		select {
-		case <-stop:
+		case <-ctx.Done():
 			fmt.Printf("Stopped %d\n", num)
 			break eventLoop
 		case <-mid:

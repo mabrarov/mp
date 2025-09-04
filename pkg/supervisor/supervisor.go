@@ -1,6 +1,7 @@
 package supervisor
 
 import (
+	"context"
 	"errors"
 	"sync"
 
@@ -8,29 +9,29 @@ import (
 )
 
 type Supervisor struct {
-	group   sync.WaitGroup
-	mutex   sync.Mutex
-	stopped bool
-	stops   []chan<- StopToken
-	err     error
+	ctx    context.Context
+	cancel context.CancelFunc
+	group  sync.WaitGroup
+	mutex  sync.Mutex
+	err    error
 }
 
-func New() *Supervisor {
+func New(ctx context.Context) *Supervisor {
+	ctx, cancel := context.WithCancel(ctx)
 	return &Supervisor{
-		group:   sync.WaitGroup{},
-		mutex:   sync.Mutex{},
-		stopped: false,
-		stops:   nil,
-		err:     nil,
+		ctx:    ctx,
+		cancel: cancel,
+		group:  sync.WaitGroup{},
+		mutex:  sync.Mutex{},
+		err:    nil,
 	}
 }
 
-func (s *Supervisor) Run(p Process) {
-	stop := s.addStop()
+func (s *Supervisor) Go(p Process) {
 	s.group.Add(1)
 	go func() {
 		defer s.group.Done()
-		s.setError(runWithoutPanic(p, stop))
+		s.setError(runWithoutPanic(p, s.ctx))
 	}()
 }
 
@@ -42,16 +43,10 @@ func (s *Supervisor) Wait() error {
 }
 
 func (s *Supervisor) Stop() {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	for _, s := range s.stops {
-		close(s)
-	}
-	s.stops = nil
-	s.stopped = true
+	s.cancel()
 }
 
-func runWithoutPanic(p Process, stop <-chan StopToken) (err error) {
+func runWithoutPanic(p Process, ctx context.Context) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			pe := panicerr.New(r)
@@ -62,19 +57,7 @@ func runWithoutPanic(p Process, stop <-chan StopToken) (err error) {
 			}
 		}
 	}()
-	return p(stop)
-}
-
-func (s *Supervisor) addStop() <-chan StopToken {
-	stop := make(chan StopToken)
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	if s.stopped {
-		close(stop)
-	} else {
-		s.stops = append(s.stops, stop)
-	}
-	return stop
+	return p(ctx)
 }
 
 func (s *Supervisor) setError(err error) {
