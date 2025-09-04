@@ -17,8 +17,5 @@ func (e *Wrapper) Error() string {
 	if s, ok := e.value.(fmt.Stringer); ok {
 		return s.String()
 	}
-	if s, ok := e.value.(string); ok {
-		return s
-	}
-	return "panic"
+	return fmt.Sprintf("%v", e.value)
 }
