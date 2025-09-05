@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -9,24 +10,26 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mabrarov/mp/pkg/supervisor"
+	"github.com/mabrarov/mp/pkg/panicerr"
+	"golang.org/x/sync/errgroup"
 )
 
 func main() {
 	ctx, signalStop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer signalStop()
+	ctx, stop := context.WithCancel(ctx)
 
-	s := supervisor.New(ctx)
+	var s errgroup.Group
 	defer func() {
-		s.Stop()
+		stop()
 		_ = s.Wait()
 	}()
 
 	for i := range 10 {
 		id := i
-		s.Go(func(ctx context.Context) error {
-			return run(ctx, s.Stop, id)
-		})
+		s.Go(wrapPanic(stop, func() error {
+			return run(ctx, stop, id)
+		}))
 	}
 
 	if err := s.Wait(); err != nil {
@@ -35,6 +38,23 @@ func main() {
 	}
 
 	fmt.Println("Completed without error")
+}
+
+func wrapPanic(stop func(), f func() error) func() error {
+	return func() (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				pe := panicerr.New(r)
+				if err == nil {
+					err = pe
+				} else {
+					err = errors.Join(err, pe)
+				}
+				stop()
+			}
+		}()
+		return f()
+	}
 }
 
 func run(ctx context.Context, shutdown func(), id int) error {
