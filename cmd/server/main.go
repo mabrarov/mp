@@ -13,7 +13,8 @@ import (
 )
 
 func main() {
-	ctx, _ := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	ctx, signalStop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer signalStop()
 
 	s := supervisor.New(ctx)
 	defer func() {
