@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -10,16 +9,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mabrarov/mp/pkg/panicerr"
 	"golang.org/x/sync/errgroup"
 )
 
 func main() {
-	ctx, signalStop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer signalStop()
-	ctx, stop := context.WithCancel(ctx)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
-	var s errgroup.Group
+	s, ctx := errgroup.WithContext(ctx)
 	defer func() {
 		stop()
 		_ = s.Wait()
@@ -27,8 +24,8 @@ func main() {
 
 	for i := range 10 {
 		id := i
-		s.Go(wrapPanic(stop, func() error {
-			return run(ctx, stop, id)
+		s.Go(stopOnPanic(stop, func() error {
+			return run(ctx, id)
 		}))
 	}
 
@@ -40,24 +37,21 @@ func main() {
 	fmt.Println("Completed without error")
 }
 
-func wrapPanic(stop func(), f func() error) func() error {
-	return func() (err error) {
+func stopOnPanic(stop func(), f func() error) func() error {
+	return func() error {
+		done := false
 		defer func() {
-			if r := recover(); r != nil {
-				pe := panicerr.New(r)
-				if err == nil {
-					err = pe
-				} else {
-					err = errors.Join(err, pe)
-				}
+			if !done {
 				stop()
 			}
 		}()
-		return f()
+		err := f()
+		done = true
+		return err
 	}
 }
 
-func run(ctx context.Context, shutdown func(), id int) error {
+func run(ctx context.Context, id int) error {
 	fmt.Printf("Started %d\n", id)
 	mid := time.Tick(1 * time.Second)
 	done := time.Tick(10 * time.Second)
@@ -73,7 +67,6 @@ eventLoop:
 			if n == 0 {
 				err = fmt.Errorf("failed %d", id)
 				fmt.Printf("Error %d\n", id)
-				shutdown()
 				break eventLoop
 			}
 			if n == 1 {
