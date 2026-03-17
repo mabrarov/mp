@@ -13,10 +13,15 @@ import (
 )
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	signalCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	s, ctx := errgroup.WithContext(ctx)
+	go func() {
+		<-signalCtx.Done()
+		fmt.Println("Shutdown signal received")
+	}()
+
+	s, ctx := errgroup.WithContext(signalCtx)
 	defer func() {
 		stop()
 		_ = s.Wait()
