@@ -9,24 +9,29 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mabrarov/mp/pkg/supervisor"
+	"golang.org/x/sync/errgroup"
 )
 
 func main() {
-	ctx, signalStop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer signalStop()
+	signalCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
-	s := supervisor.New(ctx)
+	go func() {
+		<-signalCtx.Done()
+		fmt.Println("Shutdown signal received")
+	}()
+
+	s, ctx := errgroup.WithContext(signalCtx)
 	defer func() {
-		s.Stop()
+		stop()
 		_ = s.Wait()
 	}()
 
 	for i := range 10 {
 		id := i
-		s.Go(func(ctx context.Context) error {
-			return run(ctx, s.Stop, id)
-		})
+		s.Go(stopOnPanic(stop, func() error {
+			return run(ctx, id)
+		}))
 	}
 
 	if err := s.Wait(); err != nil {
@@ -37,7 +42,21 @@ func main() {
 	fmt.Println("Completed without error")
 }
 
-func run(ctx context.Context, shutdown func(), id int) error {
+func stopOnPanic(stop func(), f func() error) func() error {
+	return func() error {
+		done := false
+		defer func() {
+			if !done {
+				stop()
+			}
+		}()
+		err := f()
+		done = true
+		return err
+	}
+}
+
+func run(ctx context.Context, id int) error {
 	fmt.Printf("Started %d\n", id)
 	mid := time.Tick(1 * time.Second)
 	done := time.Tick(10 * time.Second)
@@ -53,7 +72,6 @@ eventLoop:
 			if n == 0 {
 				err = fmt.Errorf("failed %d", id)
 				fmt.Printf("Error %d\n", id)
-				shutdown()
 				break eventLoop
 			}
 			if n == 1 {
