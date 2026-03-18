@@ -29,9 +29,9 @@ func main() {
 
 	for i := range 10 {
 		id := i
-		s.Go(stopOnPanic(stop, func() error {
+		s.Go(func() error {
 			return run(ctx, id)
-		}))
+		})
 	}
 
 	if err := s.Wait(); err != nil {
@@ -40,20 +40,6 @@ func main() {
 	}
 
 	fmt.Println("Completed without error")
-}
-
-func stopOnPanic(stop func(), f func() error) func() error {
-	return func() error {
-		done := false
-		defer func() {
-			if !done {
-				stop()
-			}
-		}()
-		err := f()
-		done = true
-		return err
-	}
 }
 
 func run(ctx context.Context, id int) error {
