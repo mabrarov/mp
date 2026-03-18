@@ -13,28 +13,32 @@ import (
 )
 
 func main() {
-	signalCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	go func() {
-		<-signalCtx.Done()
-		fmt.Println("Shutdown signal received")
-	}()
-
-	s, ctx := errgroup.WithContext(signalCtx)
+	ctx, stop := context.WithCancel(context.Background())
+	group, ctx := errgroup.WithContext(ctx)
 	defer func() {
 		stop()
-		_ = s.Wait()
+		_ = group.Wait()
+	}()
+
+	signalChan := make(chan os.Signal, 2)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+	defer func() {
+		signal.Stop(signalChan)
+	}()
+	go func() {
+		<-signalChan
+		fmt.Println("Shutdown signal received")
+		stop()
 	}()
 
 	for i := range 10 {
 		id := i
-		s.Go(func() error {
+		group.Go(func() error {
 			return run(ctx, id)
 		})
 	}
 
-	if err := s.Wait(); err != nil {
+	if err := group.Wait(); err != nil {
 		fmt.Printf("Completed with error: %v\n", err)
 		os.Exit(1)
 	}
