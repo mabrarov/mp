@@ -13,6 +13,10 @@ import (
 )
 
 func main() {
+	os.Exit(runMain())
+}
+
+func runMain() int {
 	ctx, stop := context.WithCancel(context.Background())
 	group, ctx := errgroup.WithContext(ctx)
 	defer func() {
@@ -34,19 +38,20 @@ func main() {
 	for i := range 10 {
 		id := i
 		group.Go(func() error {
-			return run(ctx, id)
+			return runWorker(ctx, id)
 		})
 	}
 
 	if err := group.Wait(); err != nil {
 		fmt.Printf("Completed with error: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 
 	fmt.Println("Completed without error")
+	return 0
 }
 
-func run(ctx context.Context, id int) error {
+func runWorker(ctx context.Context, id int) error {
 	fmt.Printf("Started %d\n", id)
 	mid := time.Tick(1 * time.Second)
 	done := time.Tick(10 * time.Second)
